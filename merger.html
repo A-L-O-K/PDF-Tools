@@ -385,60 +385,57 @@
             animation: slideIn 0.3s ease-out;
         }
 
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateX(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
+        .file-item.dragging {
+            opacity: 0.7;
+            background: linear-gradient(90deg, #e0e7ff 60%, #f1f5f9 100%);
+            box-shadow: 0 4px 24px 0 rgba(102,126,234,0.18);
+            border: 2px solid #667eea;
+            z-index: 2;
         }
-
-        .file-item:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-            background: linear-gradient(135deg, #fff 0%, #f8fafc 100%);
+        .file-item.drop-target {
+            box-shadow: 0 0 0 3px #a5b4fc, 0 4px 24px 0 rgba(102,126,234,0.10);
+            background: linear-gradient(90deg, #f0f4ff 60%, #e0e7ff 100%);
+            border: 2px dashed #667eea;
         }
-
-        .file-info {
+        .file-item {
+            transition: box-shadow 0.18s, background 0.18s, border 0.18s, opacity 0.18s;
+        }
+        .file-item:not(.dragging):hover {
+            background: #f3f4f6;
+            box-shadow: 0 2px 12px 0 rgba(102,126,234,0.08);
+        }
+        .file-item .file-details {
             display: flex;
-            align-items: center;
-            flex: 1;
-        }
-
-        .file-icon {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(45deg, #ef4444, #dc2626);
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
+            flex-direction: column;
+            align-items: flex-start;
             justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 0.8rem;
-            margin-right: 1rem;
-            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+            padding-left: 0.5rem;
         }
-
-        .file-details {
-            flex: 1;
-        }
-
-        .file-name {
+        .file-item .file-name {
+            font-size: 1.08rem;
             font-weight: 600;
-            color: #2d3748;
-            margin-bottom: 0.2rem;
+            color: #3730a3;
+            background: linear-gradient(90deg, #6366f1 40%, #818cf8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-fill-color: transparent;
+            letter-spacing: 0.01em;
+            margin-bottom: 0.1rem;
             word-break: break-all;
         }
-
-        .file-size {
-            font-size: 0.8rem;
-            color: #718096;
+        .file-item .file-size {
+            font-size: 0.92rem;
+            color: #64748b;
+            font-weight: 400;
+            background: #f1f5f9;
+            border-radius: 6px;
+            padding: 2px 8px;
+            margin-top: 2px;
         }
-
+        .file-item .file-icon {
+            display: none;
+        }
         .remove-btn {
             background: linear-gradient(45deg, #ef4444, #dc2626);
             color: white;
@@ -764,24 +761,66 @@
                 mergeBtn.disabled = true;
                 return;
             }
-
             mergeBtn.disabled = selectedFiles.length < 2;
-            
-            fileListDiv.innerHTML = selectedFiles.map((file, index) => `
-                <div class="file-item">
-                    <div class="file-info">
-                        <div class="file-icon">PDF</div>
-                        <div class="file-details">
-                            <div class="file-name">${file.name}</div>
-                            <div class="file-size">${formatFileSize(file.size)}</div>
-                        </div>
+            let html = '';
+            selectedFiles.forEach((file, index) => {
+                html += `
+                <div class="file-item${dragSrcIndex === index ? ' dragging' : ''}${dragOverIndex === index && dragSrcIndex !== null ? ' drop-target' : ''}"
+                    draggable="true" data-index="${index}"
+                    ondragstart="onDragStart(event, ${index})"
+                    ondragover="onDragOver(event, ${index})"
+                    ondrop="onDrop(event, ${index})"
+                    ondragend="onDragEnd(event)">
+                    <div class="file-details">
+                        <div class="file-name">${file.name}</div>
+                        <div class="file-size">${formatFileSize(file.size)}</div>
                     </div>
-                    <button class="remove-btn" onclick="removeFile(${index})" title="Remove file">
-                        ×
-                    </button>
+                    <button class="remove-btn" onclick="removeFile(${index})" title="Remove file">×</button>
                 </div>
-            `).join('');
+                `;
+            });
+            fileListDiv.innerHTML = html;
         }
+
+        // Drag and drop reordering logic
+        let dragSrcIndex = null;
+        let dragOverIndex = null;
+        window.onDragStart = function(event, index) {
+            dragSrcIndex = index;
+            dragOverIndex = null;
+            event.dataTransfer.effectAllowed = 'move';
+            setTimeout(() => {
+                const items = document.querySelectorAll('.file-item');
+                if (items[index]) items[index].classList.add('dragging');
+            }, 0);
+        };
+        window.onDragOver = function(event, index) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+            if (dragSrcIndex !== null && dragSrcIndex !== index) {
+                // Move the item visually as you hover
+                const movedFile = selectedFiles[dragSrcIndex];
+                selectedFiles.splice(dragSrcIndex, 1);
+                selectedFiles.splice(index, 0, movedFile);
+                dragOverIndex = index;
+                dragSrcIndex = index;
+                updateFileList();
+            } else {
+                dragOverIndex = index;
+                updateFileList();
+            }
+        };
+        window.onDrop = function(event, index) {
+            event.preventDefault();
+            dragSrcIndex = null;
+            dragOverIndex = null;
+            updateFileList();
+        };
+        window.onDragEnd = function(event) {
+            dragSrcIndex = null;
+            dragOverIndex = null;
+            updateFileList();
+        };
 
         function formatFileSize(bytes) {
             if (bytes === 0) return '0 Bytes';
